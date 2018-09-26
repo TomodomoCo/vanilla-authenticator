@@ -11,42 +11,42 @@ class VanillaAuthenticator
      *
      * @var string
      */
-    var $loginUrl = '/entry/signin?Target=';
+    protected $loginUrl = '/entry/signin?Target=';
 
     /**
      * Default page to redirect to and fetch
      *
      * @var string
      */
-    var $targetPath = 'profile.json';
+    protected $targetPath = 'profile.json';
 
     /**
      * The Guzzle object of the login page
      *
      * @var \GuzzleHttp\Psr7\Response
      */
-    var $loginPage;
+    protected $loginPage;
 
     /**
      * The postData we use to login
      *
      * @var array
      */
-    var $postData = [];
+    protected $postData = [];
 
 	/**
 	 * Guzzle client
 	 *
 	 * @var \GuzzleHttp\Client
 	 */
-	var $client;
+	public $client;
 
     /**
      * Instantiate a Guzzle client
      *
      * @return void
      */
-    public function __construct($baseUrl, $options = [])
+    public function __construct(string $baseUrl, array $options = [])
     {
         if ($baseUrl === null) {
             throw new Exception('missing_baseurl', 'You need to provide a base URL.');
@@ -78,16 +78,55 @@ class VanillaAuthenticator
 		return $this->client;
 	}
 
+	/**
+	 * Set the authentication credentials
+	 *
+	 * @param string $email
+	 * @param string $password
+	 *
+	 * @return void
+	 */
+	public function setCredentials(string $email, string $password)
+	{
+		$this->email = $email;
+		$this->password = $password;
+
+		return;
+	}
+
+	/**
+	 * Set the target path to load on sign-in
+	 *
+	 * @param string $targetPath
+	 *
+	 * @return void
+	 */
+	public function setTargetPath(string $targetPath)
+	{
+		$this->targetPath = $targetPath;
+
+		return;
+	}
+
+	/**
+	 * Get the full target URL
+	 *
+	 * @return string
+	 */
+	public function getLoginUrl()
+	{
+		return $this->loginUrl . $this->targetPath;
+	}
+
     /**
      * Retrive the Guzzle object for the login page
      *
      * @return \GuzzleHttp\Psr7\Response
      */
-    public function getLoginPage()
+    private function getLoginPage()
     {
-        if (! isset($this->loginPage)) {
-            $this->loginPage = $this->getClient()->request('GET', $this->loginUrl . $this->targetPath);
-		}
+		// Set the login page
+		$this->loginPage = $this->loginPage ?? $this->getClient()->request('GET', $this->getLoginUrl());
 
         return $this->loginPage;
     }
@@ -98,7 +137,7 @@ class VanillaAuthenticator
      *
      * @return array
      */
-    public function getDefaultLoginFields()
+    private function getDefaultLoginFields()
     {
         // Fetch the form
         $qp = html5qp((string) $this->getLoginPage()->getBody(), '#Form_User_SignIn');
@@ -131,7 +170,7 @@ class VanillaAuthenticator
      *
      * @return array
      */
-    public function getPostData()
+    private function getPostData()
     {
         // If we don't have postData already, retrieve the default login fields
         if (empty($this->postData)) {
@@ -159,7 +198,7 @@ class VanillaAuthenticator
      *
      * @return void
      */
-    public function setPostData($key, $value)
+    private function setPostData(string $key, string $value)
     {
         $this->postData[$key] = $value;
 
@@ -174,7 +213,7 @@ class VanillaAuthenticator
     public function authenticate()
     {
         // POST with our postData
-        $response = $this->getClient()->request('POST', $this->loginUrl . $this->targetPath, [
+        $response = $this->getClient()->request('POST', $this->getLoginUrl(), [
             'form_params' => $this->getPostData(),
         ]);
 

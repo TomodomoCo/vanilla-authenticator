@@ -9,7 +9,6 @@ PHP library for remotely authenticating with Vanilla Forums.
 
 $auth = new VanillaAuthentication('http://my-forum-name.vanillaforums.com');
 $auth->setCredentials('user@domain.com', 'abcd1234');
-// $auth->setTarget();
 
 try {
 	$response = $auth->authenticate();
