@@ -4,7 +4,7 @@ namespace Tomodomo\VanillaAuthenticator;
 
 use GuzzleHttp\Client as GuzzleClient;
 
-class VanillaAuthenticator
+class Authenticator
 {
     /**
      * Route to the login page
