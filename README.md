@@ -1,10 +1,10 @@
 # Vanilla Authenticator
 
-PHP library for remotely authenticating with Vanilla Forums.
+PHP library for programmatically authenticating with Vanilla Forums.
 
 ## Example
 
-```
+```php
 <?php
 
 $auth = new VanillaAuthentication('http://my-forum-name.vanillaforums.com');
@@ -15,6 +15,19 @@ try {
 } catch (\Exception $e) {
 	echo 'Your credentials were invalid.';
 }
+```
+
+After authenticating, use the Guzzle client to fetch additional data as the authenticated user:
+
+```php
+<?php
+
+$client = $auth->getClient();
+
+$response = $client->get('http://my-forum-name.vanillaforums.com/profile.json');
+$profile  = json_decode((string) $response->getBody(), true);
+
+print_r($profile);
 ```
 
 ## About Tomodomo
