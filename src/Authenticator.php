@@ -11,14 +11,7 @@ class Authenticator
      *
      * @var string
      */
-    protected $loginUrl = '/entry/signin?Target=';
-
-    /**
-     * Default page to redirect to and fetch
-     *
-     * @var string
-     */
-    protected $targetPath = 'profile.json';
+    protected $loginUrl = '/entry/signin';
 
     /**
      * The Guzzle object of the login page
@@ -34,12 +27,12 @@ class Authenticator
      */
     protected $postData = [];
 
-	/**
-	 * Guzzle client
-	 *
-	 * @var \GuzzleHttp\Client
-	 */
-	public $client;
+    /**
+     * Guzzle client
+     *
+     * @var \GuzzleHttp\Client
+     */
+    public $client;
 
     /**
      * Instantiate a Guzzle client
@@ -49,8 +42,8 @@ class Authenticator
     public function __construct(string $baseUrl, array $options = [])
     {
         if ($baseUrl === null) {
-            throw new Exception('missing_baseurl', 'You need to provide a base URL.');
-		}
+            throw new \Exception('missing_baseurl', 'You need to provide a base URL.');
+        }
 
         // Set default args
         $defaults = [
@@ -65,58 +58,34 @@ class Authenticator
         // Instantiate the Guzzle client
         $this->client = new GuzzleClient($options);
 
-		return;
+        return;
     }
 
-	/**
-	 * Retrieve the Guzzle client
-	 *
-	 * @return \GuzzleHttp\Client
-	 */
-	public function getClient()
-	{
-		return $this->client;
-	}
+    /**
+     * Retrieve the Guzzle client
+     *
+     * @return \GuzzleHttp\Client
+     */
+    public function getClient()
+    {
+        return $this->client;
+    }
 
-	/**
-	 * Set the authentication credentials
-	 *
-	 * @param string $email
-	 * @param string $password
-	 *
-	 * @return void
-	 */
-	public function setCredentials(string $email, string $password)
-	{
-		$this->email = $email;
-		$this->password = $password;
+    /**
+     * Set the authentication credentials
+     *
+     * @param string $email
+     * @param string $password
+     *
+     * @return void
+     */
+    public function setCredentials(string $email, string $password)
+    {
+        $this->email = $email;
+        $this->password = $password;
 
-		return;
-	}
-
-	/**
-	 * Set the target path to load on sign-in
-	 *
-	 * @param string $targetPath
-	 *
-	 * @return void
-	 */
-	public function setTargetPath(string $targetPath)
-	{
-		$this->targetPath = $targetPath;
-
-		return;
-	}
-
-	/**
-	 * Get the full target URL
-	 *
-	 * @return string
-	 */
-	public function getLoginUrl()
-	{
-		return $this->loginUrl . $this->targetPath;
-	}
+        return;
+    }
 
     /**
      * Retrive the Guzzle object for the login page
@@ -125,8 +94,8 @@ class Authenticator
      */
     private function getLoginPage()
     {
-		// Set the login page
-		$this->loginPage = $this->loginPage ?? $this->getClient()->request('GET', $this->getLoginUrl());
+        // Set the login page
+        $this->loginPage = $this->loginPage ?? $this->getClient()->get($this->loginUrl);
 
         return $this->loginPage;
     }
@@ -147,14 +116,13 @@ class Authenticator
 
         // Loop through the inputs
         foreach($find as $item) {
-
             // Grab the input name
             $key = $item->attr('name');
 
             // If the item is a checkbox or the RememberMe field, skip it
             if (in_array($key, ['Checkboxes[]', 'RememberMe', 'Sign In'])) {
                 continue;
-			}
+            }
 
             // Otherwise, add to our array
             $fields[$key] = $item->val();
@@ -175,17 +143,17 @@ class Authenticator
         // If we don't have postData already, retrieve the default login fields
         if (empty($this->postData)) {
             $this->postData = $this->getDefaultLoginFields();
-		}
+        }
 
         // If the username is set, add it to the postData
         if ($this->email !== null) {
             $this->setPostData('Email', $this->email);
-		}
+        }
 
         // If the password is set, add it to the postData
         if ($this->password !== null) {
             $this->setPostData('Password', $this->password);
-		}
+        }
 
         return $this->postData;
     }
@@ -202,53 +170,110 @@ class Authenticator
     {
         $this->postData[$key] = $value;
 
-		return;
+        return;
     }
 
     /**
      * Authenticate a user
      *
-     * @return array|bool
+     * @return bool
      */
-    public function authenticate()
+    public function authenticate() : bool
     {
+		// Get our custom POST request data
+		$postData = $this->getPostData();
+
+		// Get a transient key
+		$body = $this->makeAuthenticationRequest($postData);
+
+		// Add the transient key to the payload
+		$postData['TransientKey'] = $this->getTransientKeyFromResponseBody($body['Data'] ?? '');
+
+		// Really login now
+		$body = $this->makeAuthenticationRequest($postData);
+
+		// Handle errors
+		if ($this->bodyHasErrors($body['Data'] ?? '') || $body['FormSaved'] === false) {
+            throw new \Exception('Your login was incorrect. Double-check your username and password, and try again.');
+		}
+
+		// We have successfully authenticated
+		return true;
+    }
+
+	/**
+	 * Get the transient key from the response body.
+	 *
+	 * @param string $body
+	 * @return string
+	 */
+	public function getTransientKeyFromResponseBody(string $body) : string
+	{
+		$qp = html5qp( "<html><body>{$body['Data']}</body></html>" )->find('#Form_TransientKey');
+
+		foreach ($qp as $input) {
+			return $input->val();
+		}
+
+		throw new \Exception('no_transient', 'Could not find a transient key.');
+	}
+
+	/**
+	 * Make the authentication request.
+	 *
+	 * @param array $postData
+	 * @return string
+	 */
+	public function makeAuthenticationRequest(array $postData) : string
+	{
         // POST with our postData
-        $response = $this->getClient()->request('POST', $this->getLoginUrl(), [
-            'form_params' => $this->getPostData(),
-        ]);
+		$response = $this->getClient()->request(
+			'POST',
+			$this->loginUrl,
+			[
+				'form_params' => $postData,
+				'headers' => [
+					'X-Requested-With' => 'XMLHttpRequest',
+				],
+			]
+		);
 
         // If the response code isn't 200...
         if ($response->getStatusCode() !== 200) {
             throw new \Exception('There was an error authenticating your account.');
         }
 
-        // Get the body (cast to a string, because Guzzle)
-        $body = (string) $response->getBody();
+        // Return the response body
+        return json_decode((string) $response->getBody(), true);
+	}
 
-        // If looking for JSON, and we have valid/decodable JSON...
-        if ($this->targetPath === 'profile.json' && $this->user = json_decode($body, true)) {
-            return $this->user;
+	/**
+	 * Check for errors in a response body.
+	 *
+	 * @param string $body
+	 * @return bool
+	 */
+	public function bodyHasErrors(string $body) : bool
+	{
+        // Get a queryable version of response errors
+		$qp = html5qp( "<html><body>{$body}</body></html>" )->find('.Messages.Errors');
+
+		if (empty($qp->get())) {
+			return false;
 		}
 
-        // Get a queryable version of response errors
-        $qp = html5qp($body)->find('.Messages.Errors');
-
-        // Throw an exception when the username is wrong
-        if (!empty($qp->get()) && strpos($qp->text(), 'no account could be found')) {
-            throw new \Exception('Your account could not be found.');
+        if (strpos($qp->text(), 'no account could be found')) {
+            return true;
         }
 
-        // Throw an exception for invalid passwords
-        if (!empty($qp->get()) && strpos($qp->text(), 'password you entered was incorrect')) {
-            throw new \Exception('Your password was incorrect.');
+        if (strpos($qp->text(), 'password you entered was incorrect')) {
+            return true;
         }
 
-        // Throw an exception for a generic error
-        if (!empty($qp->get()) && strpos($qp->text(), 'Bad login, double-check')) {
-            throw new \Exception('Your login was incorrect. Double-check your username and password, and try again.');
+        if (strpos($qp->text(), 'login, double-check')) {
+            return true;
         }
 
-        // Return the response body
-        return (string) $response->getBody();
-    }
+		return false;
+	}
 }
