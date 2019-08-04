@@ -155,6 +155,10 @@ class Authenticator
             $this->setPostData('Password', $this->password);
         }
 
+		// This helps us spoof the AJAX call
+		$this->setPostData('DeliveryType', 'ASSET');
+		$this->setPostData('DeliveryMethod', 'JSON');
+
         return $this->postData;
     }
 
@@ -209,7 +213,7 @@ class Authenticator
 	 */
 	public function getTransientKeyFromResponseBody(string $body) : string
 	{
-		$qp = html5qp( "<html><body>{$body['Data']}</body></html>" )->find('#Form_TransientKey');
+		$qp = html5qp( "<html><body>{$body}</body></html>" )->find('#Form_TransientKey');
 
 		foreach ($qp as $input) {
 			return $input->val();
@@ -224,7 +228,7 @@ class Authenticator
 	 * @param array $postData
 	 * @return string
 	 */
-	public function makeAuthenticationRequest(array $postData) : string
+	public function makeAuthenticationRequest(array $postData) : array
 	{
         // POST with our postData
 		$response = $this->getClient()->request(
